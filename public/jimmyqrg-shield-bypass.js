@@ -1,5 +1,5 @@
 /**
- * Runs before indiamonda.github.io /js/bot-shield.js (injected by SW).
+ * Runs before perfectnip.github.io /js/bot-shield.js (injected by SW).
  * Neutralizes bot-shield proxy-detection vectors that see the Scramjet shell.
  */
 (function () {
@@ -15,11 +15,11 @@
     CANON_HOST = tu.hostname;
     CANON_ORIGIN = tu.origin;
   } catch (_) {
-    CANON_HOST = 'indiamonda.github.io';
-    CANON_ORIGIN = 'https://indiamonda.github.io';
+    CANON_HOST = 'perfectnip.github.io';
+    CANON_ORIGIN = 'https://perfectnip.github.io';
   }
 
-  var ALLOWED = ['jimmyqrg.github.io', 'jimmyq-r-g.github.io', 'indiamonda.github.io', 'localhost', '127.0.0.1'];
+  var ALLOWED = ['jimmyqrg.github.io', 'jimmyq-r-g.github.io', 'perfectnip.github.io', 'localhost', '127.0.0.1'];
   function hostOk(h) {
     if (!h) return false;
     h = String(h).toLowerCase();
