@@ -192,6 +192,21 @@ serveNoCacheHtml("/index.html", "index.html");
 serveNoCacheHtml("/launcher.html", "launcher.html");
 serveNoCacheHtml("/unblocker.html", "unblocker.html");
 
+// Service workers must never be served with `immutable`/long `max-age`,
+// otherwise the browser keeps running a stale SW (and stale register-sw
+// logic) for up to 7 days and proxy/UI fixes never reach clients.
+function serveNoCache(routePath, file, type) {
+  fastify.get(routePath, async (req, reply) => {
+    reply.header("Cache-Control", "no-cache, no-store, must-revalidate");
+    reply.header("Pragma", "no-cache");
+    reply.header("Expires", "0");
+    reply.type(type).send(fs.createReadStream(path.join(publicPath, file)));
+    return reply;
+  });
+}
+serveNoCache("/sw.js", "sw.js", "application/javascript");
+serveNoCache("/register-sw.js", "register-sw.js", "application/javascript");
+
 fastify.get("/adblock-rules.json", async (req, reply) => {
   try {
     const now = Date.now();

@@ -38,6 +38,16 @@
             }
         })();
     </script>
+    <script>
+        // If opened with a ?url= target (e.g. the games-site proxy fallback
+        // `?raw=true&url=...`), hand off to the launcher so the target site
+        // actually opens instead of landing on a dead dashboard.
+        (function () {
+            if (new URLSearchParams(location.search).get('url')) {
+                location.replace('/launcher.html' + location.search);
+            }
+        })();
+    </script>
     <style>
         :root {
             --bg: #1e1e2e;
