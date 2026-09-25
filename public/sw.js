@@ -11,35 +11,54 @@ self.addEventListener("activate", (event) => {
 let adBlockEnabled = true;
 let adBlockRules = null;
 let adBlockExactSet = null;
-let adBlockSuffixSet = null;
 let adBlockPathRe = null;
 let adBlockSuffixes = null;
 let insertScript = null;
 let adBlockReady = false;
+let adBlockLoadPromise = null;
+let adBlockRetryAfter = 0;
+const ADBLOCK_RETRY_DELAY = 30 * 1000;
 
 async function loadAdBlockRules() {
-  try {
-    const resp = await fetch("/adblock-rules.json");
-    if (!resp.ok) {
-      console.warn("AdBlock: failed to load rules, status:", resp.status);
-      return;
+  if (adBlockReady) return true;
+  if (adBlockLoadPromise) return adBlockLoadPromise;
+  if (Date.now() < adBlockRetryAfter) return false;
+
+  adBlockLoadPromise = (async () => {
+    try {
+      const resp = await fetch("/adblock-rules.json", { cache: "no-store" });
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      const rules = await resp.json();
+      if (!Array.isArray(rules.exactDomains) || !Array.isArray(rules.suffixDomains)) {
+        throw new Error("Invalid ad-block rule format");
+      }
+      let pathRe = null;
+      if (typeof rules.pathReSource === "string" && rules.pathReSource) {
+        pathRe = new RegExp(rules.pathReSource, "i");
+      }
+
+      adBlockRules = rules;
+      adBlockExactSet = new Set(rules.exactDomains.map((host) => String(host).toLowerCase()));
+      adBlockSuffixes = rules.suffixDomains
+        .filter((suffix) => typeof suffix === "string" && suffix.startsWith("."))
+        .map((suffix) => suffix.toLowerCase());
+      adBlockPathRe = pathRe;
+      adBlockReady = true;
+      console.log("AdBlock: rules loaded", {
+        exact: adBlockExactSet.size,
+        suffix: adBlockSuffixes.length,
+        path: adBlockPathRe ? "loaded" : "none"
+      });
+      return true;
+    } catch (e) {
+      adBlockRetryAfter = Date.now() + ADBLOCK_RETRY_DELAY;
+      console.warn("AdBlock: rules unavailable; requests will pass through until retry:", e.message);
+      return false;
+    } finally {
+      adBlockLoadPromise = null;
     }
-    adBlockRules = await resp.json();
-    if (adBlockRules.exactDomains)
-      adBlockExactSet = new Set(adBlockRules.exactDomains);
-    if (adBlockRules.suffixDomains)
-      adBlockSuffixes = adBlockRules.suffixDomains;
-    if (adBlockRules.pathReSource)
-      adBlockPathRe = new RegExp(adBlockRules.pathReSource, "i");
-    adBlockReady = true;
-    console.log("AdBlock: rules loaded", {
-      exact: adBlockExactSet?.size || 0,
-      suffix: adBlockSuffixes?.length || 0,
-      path: adBlockPathRe ? "loaded" : "none"
-    });
-  } catch (e) {
-    console.error("AdBlock: failed to load rules:", e);
-  }
+  })();
+  return adBlockLoadPromise;
 }
 
 /** Same host allowlist semantics as src/util/adBlocker.js (first-party delicate sites). */
@@ -99,8 +118,7 @@ function isAdBlockExempt(url) {
 function shouldBlockUrl(url) {
   if (!adBlockEnabled) return false;
   if (!adBlockRules) {
-    // Rules not loaded yet - try to load them and don't block
-    loadAdBlockRules();
+    // The fetch handler awaits rule loading before reaching this check.
     return false;
   }
   if (isAdBlockExempt(url)) return false;
@@ -228,8 +246,13 @@ function blockedStubResponse(request, destUrl) {
 }
 
 self.addEventListener("message", (event) => {
-  if (event.data && event.data.type === "adblock-toggle") {
-    adBlockEnabled = !!event.data.enabled;
+  if (event.data && (event.data.type === "adblock-set" || event.data.type === "adblock-toggle")) {
+    if (typeof event.data.enabled === "boolean") {
+      adBlockEnabled = event.data.enabled;
+      for (const port of event.ports || []) {
+        port.postMessage({ type: "adblock-state", enabled: adBlockEnabled });
+      }
+    }
   }
   if (event.data && event.data.type === "update-insert-script") {
     insertScript = event.data.script || null;
@@ -342,6 +365,7 @@ const URL_BAR_HTML = `<div id="__rh-url-bar" data-rh-url-bar="1" style="position
 var d=document.getElementById('__rh-url-bar');
 var t=document.getElementById('__rh-url-bar-text');
 if(!d||!t)return;
+try { if(sessionStorage.getItem('__rh_hide_current_url')==='1'){d.remove();return;} } catch(_) {}
 function b64d(e){if(!e)return e;e=e.replace(/-/g,'+').replace(/_/g,'/');while(e.length%4)e+='=';try{return decodeURIComponent(atob(e))}catch(_){return e}}
 function cur(){var href=location.href;var i=href.indexOf('/~/sj/');if(i<0)return href;var rest=href.slice(i+6);var s=rest.indexOf('/');if(s<0)return href;rest=rest.slice(s+1);s=rest.indexOf('/');if(s<0)return href;var enc=rest.slice(s+1);var q=enc.indexOf('?');if(q>=0)enc=enc.slice(0,q);var h=enc.indexOf('#');if(h>=0)enc=enc.slice(0,h);return b64d(enc)||href;}
 var last='';
@@ -426,7 +450,9 @@ self.addEventListener("fetch", (event) => {
       (async () => {
         try {
           const destUrl = decodeProxiedUrl(event.request.url);
-          if (adBlockEnabled && destUrl && shouldBlockUrl(destUrl)) {
+          // Load rules before checking the first proxied request so startup
+          // timing does not let early ad requests slip through unfiltered.
+          if (adBlockEnabled && destUrl && await loadAdBlockRules() && shouldBlockUrl(destUrl)) {
             return blockedStubResponse(event.request, destUrl);
           }
         } catch (_) {}

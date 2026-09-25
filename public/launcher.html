@@ -61,6 +61,15 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
     var barEl = document.getElementById('progress-bar');
     var stageEl = document.getElementById('progress-stage');
     var pctEl = document.getElementById('progress-pct');
+    // An explicit ?adblock=true|false wins for this launcher session. Without
+    // it, inherit the dashboard preference (enabled by default).
+    function resolveAdBlockSetting(value) {
+        if (value === 'true') return true;
+        if (value === 'false') return false;
+        try { return localStorage.getItem('adBlockEnabled') !== '0'; }
+        catch (_) { return true; }
+    }
+    var adBlockEnabled = resolveAdBlockSetting(params.get('adblock'));
     // Find callback key for signaling success/fail to dashboard
     var _cbKey = null;
     for (var k in sessionStorage) {
@@ -128,6 +137,31 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
     var _scramjetReady = false;
     var _initAttempts = 0;
 
+    function setAdBlockEnabled(sw, enabled) {
+        return new Promise(function (resolve) {
+            if (!sw || typeof MessageChannel === 'undefined') {
+                resolve();
+                return;
+            }
+            var channel = new MessageChannel();
+            var done = false;
+            var timeout = setTimeout(finish, 1000);
+            function finish() {
+                if (done) return;
+                done = true;
+                clearTimeout(timeout);
+                channel.port1.close();
+                resolve();
+            }
+            channel.port1.onmessage = finish;
+            try {
+                sw.postMessage({ type: 'adblock-set', enabled: enabled }, [channel.port2]);
+            } catch (_) {
+                finish();
+            }
+        });
+    }
+
     async function initScramjet() {
         if (_scramjetReady) return;
         if (_initAttempts > 2) return;
@@ -135,6 +169,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
         try {
             var sw = await registerSW();
             if (!sw) throw new Error('Service worker not active');
+            await setAdBlockEnabled(sw, adBlockEnabled);
             var wispUrl = (location.protocol === 'https:' ? 'wss' : 'ws') + '://' + location.host + '/wisp/';
             var mod = await import('/libcurl-transport/index.mjs');
             var LibcurlClient = mod.default;
@@ -392,9 +427,16 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
         }
 
         var rawParam = params.get('raw') === 'true';
+        try {
+            if (rawParam) sessionStorage.setItem('__rh_hide_current_url', '1');
+            else sessionStorage.removeItem('__rh_hide_current_url');
+        } catch (_) {}
         var normalized = normalizeUrl(url);
         currentRealUrl = normalized;
-        targetEl.textContent = normalized;
+        // Raw embeds use the launcher only as a transparent transport frame;
+        // never show the destination URL header in that mode.
+        targetEl.hidden = rawParam;
+        targetEl.textContent = rawParam ? '' : normalized;
         document.title = normalized;
         postToParent({ type: 'jqrg:ready', url: currentRealUrl });
         broadcastUrl(currentRealUrl, '');

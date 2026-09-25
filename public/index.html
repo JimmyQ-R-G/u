@@ -519,6 +519,12 @@
             try {
                 const sw = await registerSW();
                 if (!sw) throw new Error('SW not active');
+                // Restore the saved dashboard preference whenever the worker
+                // starts or the page takes control after a service-worker update.
+                sw.postMessage({
+                    type: 'adblock-set',
+                    enabled: localStorage.getItem('adBlockEnabled') !== '0'
+                });
                 const wispUrl = (location.protocol === 'https:' ? 'wss' : 'ws') + '://' + location.host + '/wisp/';
                 const { default: LibcurlClient } = await import('/libcurl-transport/index.mjs');
                 const transport = new LibcurlClient({ wisp: wispUrl });
