@@ -420,7 +420,7 @@ async function processHtmlNavigation(response, destUrl) {
   if (isJimmyqrgDest(destUrl)) {
     text = injectAfterHeadOpen(text, makeJimmyBypassTag(destUrl));
   }
-  if (!text.includes('id="__rh-cosmetic-ad"')) {
+  if (adBlockEnabled && !text.includes('id="__rh-cosmetic-ad"')) {
     text = injectBeforeHeadClose(text, COSMETIC_STYLE);
   }
   // Inject URL bar CSS in <head> and the bar itself right after <body> opens.
