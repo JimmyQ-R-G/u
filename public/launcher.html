@@ -76,6 +76,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
     var fallbackEl = document.getElementById('direct-fallback');
     var fallbackMessageEl = document.getElementById('direct-fallback-message');
     var fallbackLinkEl = document.getElementById('direct-fallback-link');
+    var directFallbackSuppressed = params.get('raw') === 'true';
     document.getElementById('direct-fallback-dismiss').addEventListener('click', function () {
         fallbackEl.hidden = true;
     });
@@ -321,6 +322,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
     }
 
     function showDirectFallback(message) {
+        if (directFallbackSuppressed) return;
         var directUrl = String(currentRealUrl || '').replace(/^raw!/, '');
         if (!/^https?:\/\//i.test(directUrl)) return;
         fallbackLinkEl.href = directUrl;
@@ -433,6 +435,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
         }
         var normalized = normalizeUrl(inputUrl);
         currentRealUrl = rawMode ? 'raw!' + normalized : normalized;
+        directFallbackSuppressed = rawMode;
         document.title = currentRealUrl;
         broadcastUrl(currentRealUrl, '');
 
@@ -465,6 +468,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
         }
 
         var rawParam = params.get('raw') === 'true';
+        directFallbackSuppressed = rawParam;
         try {
             if (rawParam) sessionStorage.setItem('__rh_hide_current_url', '1');
             else sessionStorage.removeItem('__rh_hide_current_url');
