@@ -178,10 +178,25 @@ function decodeProxiedUrl(requestUrl) {
     rest = rest.slice(slashIdx + 1);
     slashIdx = rest.indexOf("/");
     if (slashIdx < 1) return null;
-    return decodeURIComponent(rest.slice(slashIdx + 1));
+    return decodeProxyCodec(rest.slice(slashIdx + 1));
   } catch (_) {
     return null;
   }
+}
+
+function decodeProxyCodec(input) {
+  if (!input) return input;
+  const marker = "~b64~";
+  if (input.startsWith(marker)) input = input.slice(marker.length);
+  else {
+    try {
+      const uri = decodeURIComponent(input);
+      if (/^https?:\/\//i.test(uri)) return uri;
+    } catch (_) {}
+  }
+  input = input.replace(/-/g, "+").replace(/_/g, "/");
+  while (input.length % 4) input += "=";
+  try { return decodeURIComponent(atob(input)); } catch (_) { return input; }
 }
 
 const PIXEL_GIF = (() => {
@@ -355,7 +370,7 @@ var d=document.getElementById('__rh-url-bar');
 var t=document.getElementById('__rh-url-bar-text');
 if(!d||!t)return;
 try { if(sessionStorage.getItem('__rh_hide_current_url')==='1'){d.remove();return;} } catch(_) {}
-function dec(e){if(!e)return e;try{var u=decodeURIComponent(e);if(/^https?:\\/\\//i.test(u))return u}catch(_){}e=e.replace(/-/g,'+').replace(/_/g,'/');while(e.length%4)e+='=';try{return decodeURIComponent(atob(e))}catch(_){return e}}
+function dec(e){if(!e)return e;var m='~b64~';if(e.indexOf(m)===0)e=e.slice(m.length);else{try{var u=decodeURIComponent(e);if(/^https?:\\/\\//i.test(u))return u}catch(_){}}e=e.replace(/-/g,'+').replace(/_/g,'/');while(e.length%4)e+='=';try{return decodeURIComponent(atob(e))}catch(_){return e}}
 function cur(){var href=location.href;var i=href.indexOf('/~/sj/');if(i<0)return href;var rest=href.slice(i+6);var s=rest.indexOf('/');if(s<0)return href;rest=rest.slice(s+1);s=rest.indexOf('/');if(s<0)return href;var enc=rest.slice(s+1);var q=enc.indexOf('?');if(q>=0)enc=enc.slice(0,q);var h=enc.indexOf('#');if(h>=0)enc=enc.slice(0,h);return dec(enc)||href;}
 var last='';
 function tick(){var u=cur();if(u!==last){last=u;t.textContent=u;}}
