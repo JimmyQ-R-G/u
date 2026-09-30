@@ -245,6 +245,10 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
                         allowFailedIntercepts: true,
                     },
                     siteFlags: {
+                        // YouTube's current JS bundles fail at the injected
+                        // sourcemap hook before hydration can run.
+                        'youtube.com': { sourcemaps: false },
+                        'www.youtube.com': { sourcemaps: false },
                         'www.bloxd.io': { strictRewrites: false, syncxhr: true },
                         'bloxd.io': { strictRewrites: false, syncxhr: true },
                         'perfectnip.github.io': { strictRewrites: false, syncxhr: true },
